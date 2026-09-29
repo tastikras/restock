@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<!--
+  ==========================================================================
+  ⚠️  TAI NE APPS SCRIPT FAILAS — nepainiokite su kitu Index.html
+  ==========================================================================
+  Yra DU skirtingi index.html:
+
+    1) ReStock_Scripts_2026.09.23/Index.html
+       → ReSTOCK programos sąsaja. Keliama į Apps Script redaktorių.
+
+    2) pwa/index.html  ← ŠIS FAILAS
+       → PWA apvalkalas. Publikuojamas statiniame hostinge (ne Apps Script).
+
+  Šie du failai NIEKADA nesusitinka: šio failo į Apps Script kelti nereikia
+  ir negalima (Apps Script negali atiduoti manifest.webmanifest nei sw.js).
+  Ryšys tarp jų — viena /exec nuoroda faile pwa/config.js.
+  ==========================================================================
+-->
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0B0E">
+<meta name="color-scheme" content="light dark">
+<title>ReSTOCK</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon-48.png" sizes="48x48">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ReSTOCK">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="format-detection" content="telephone=no">
+
+<style>
+/* ============================================================================
+   ReSTOCK PWA — apvalkalas
+   ============================================================================
+   Tai NE pati programa. Tai plonas, įdiegiamas „kėbulas", kuriame pilnu
+   ekranu atidaromas ReSTOCK Web App (Apps Script `iframe`).
+
+   Kodėl taip: Google Apps Script Web App fiziškai negali būti įdiegiamas —
+   jis rodomas Google apvalkale (sandboxed iframe), kurio manifestas ir
+   service worker neveikia. Todėl įdiegiamas yra šis puslapis, o programa
+   atidaroma jo viduje.
+
+   FONAS: iframe yra nuo krašto iki krašto. Saugias zonas (išpjova, gestų
+   juosta) tvarko pati programa per savo `env(safe-area-inset-*)` — taip
+   išlaikomas toks pats vaizdas kaip naršyklėje.
+   ========================================================================== */
+
+:root {
+  --bg:      #F6F6F8;
+  --card:    #FFFFFF;
+  --ink:     #131317;
+  --ink-2:   #56565F;
+  --ink-3:   #8E8E99;
+  --line:    #E6E6EB;
+  --soft:    #F1F1F4;
+  --brand:   #EE3050;
+  --brand-lo:#C31F3D;
+  --shadow:  0 18px 50px -20px rgba(17, 17, 24, .35), 0 2px 8px rgba(17, 17, 24, .06);
+  --r-sm: 9px;
+  --r-md: 13px;
+  --r-lg: 18px;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:    #0B0B0E;
+    --card:  #17171C;
+    --ink:   #F2F2F5;
+    --ink-2: #A9A9B4;
+    --ink-3: #7B7B87;
+    --line:  #2B2B33;
+    --soft:  #1E1E24;
+    --shadow: 0 18px 50px -20px rgba(0, 0, 0, .8), 0 2px 8px rgba(0, 0, 0, .4);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #0B0B0E;
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* --- Programa ------------------------------------------------------------ */
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0B0B0E;
+}
+
+/* --- Uždangos (įkėlimas / nustatymas / strigtis) ------------------------- */
+
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(20px + var(--sat)) calc(18px + var(--sar)) calc(20px + var(--sab)) calc(18px + var(--sal));
+  background: #0B0B0E;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.veil[hidden] { display: none; }
+
+#setup { background: var(--bg); }
+
+/* --- Įkėlimo uždanga ---------------------------------------------------- */
+
+#boot {
+  flex-direction: column;
+  gap: 22px;
+  background: #0B0B0E;
+  transition: opacity .35s ease;
+}
+
+#boot.gone { opacity: 0; pointer-events: none; }
+
+#boot img { width: 76px; height: 76px; border-radius: 50%; }
+
+#boot .bar {
+  width: 132px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .14);
+  overflow: hidden;
+}
+
+#boot .bar i {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--brand);
+  animation: slide 1.15s cubic-bezier(.65, 0, .35, 1) infinite;
+}
+
+@keyframes slide {
+  0%   { transform: translateX(-105%); }
+  100% { transform: translateX(250%); }
+}
+
+#boot p {
+  margin: 0;
+  color: rgba(255, 255, 255, .52);
+  font-size: 12px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+/* --- Nustatymo kortelė -------------------------------------------------- */
+
+.card {
+  width: 100%;
+  max-width: 400px;
+  padding: 28px 24px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.card img { width: 56px; height: 56px; border-radius: 50%; display: block; }
+
+.card h1 {
+  margin: 16px 0 2px;
+  font-size: 26px;
+  font-weight: 200;
+  letter-spacing: -.01em;
+}
+
+.card .sub {
+  margin: 0 0 22px;
+  color: var(--ink-3);
+  font-size: 12px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.card label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--ink-2);
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.card input {
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--soft);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+
+.card input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(238, 48, 80, .14);
+}
+
+.card .hint {
+  margin: 10px 0 0;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.card .hint.small { font-size: 11.5px; margin-top: 14px; }
+
+.card code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--soft);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.card .err {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-radius: var(--r-sm);
+  background: rgba(238, 48, 80, .10);
+  color: var(--brand-lo);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card .err { color: #FF8098; }
+}
+
+.card button {
+  width: 100%;
+  margin-top: 20px;
+  padding: 13px 16px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--brand);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background .18s ease;
+}
+
+.card button:hover { background: var(--brand-lo); }
+.card button:active { transform: translateY(1px); }
+
+/* --- Strjties uždanga --------------------------------------------------- */
+
+#stall .card { text-align: center; }
+#stall .card img { margin: 0 auto; }
+#stall .row { display: flex; gap: 10px; margin-top: 18px; }
+#stall .row button { margin-top: 0; }
+#stall .row .ghost {
+  background: var(--soft);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+
+/* --- Diegimo juosta ----------------------------------------------------- */
+
+#install {
+  position: fixed;
+  z-index: 30;
+  left: calc(12px + var(--sal));
+  right: calc(12px + var(--sar));
+  bottom: calc(12px + var(--sab));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 11px 11px 11px 16px;
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: var(--r-md);
+  background: rgba(17, 17, 22, .94);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 40px -16px rgba(0, 0, 0, .6);
+  color: #fff;
+  animation: rise .32s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+#install[hidden] { display: none; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+#install .ib-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#install .ib-txt b { font-size: 14px; font-weight: 400; }
+#install .ib-txt span {
+  color: rgba(255, 255, 255, .58);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+#install button {
+  flex: 0 0 auto;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+#installGo {
+  padding: 9px 15px;
+  border-radius: var(--r-sm);
+  background: var(--brand);
+  color: #fff;
+  font-size: 13.5px;
+}
+
+#installGo[hidden] { display: none; }
+
+#installNo {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .09);
+  color: rgba(255, 255, 255, .72);
+  font-size: 13px;
+  line-height: 1;
+}
+</style>
+</head>
+
+<body>
+
+<iframe id="app" title="ReSTOCK" allow="camera; microphone; geolocation; clipboard-read; clipboard-write; fullscreen; autoplay"></iframe>
+
+<!-- Įkėlimas -->
+<div id="boot" class="veil">
+  <img src="icons/icon-192.png" alt="" width="76" height="76">
+  <div class="bar"><i></i></div>
+  <p>Jungiamasi</p>
+</div>
+
+<!-- Pradinis nustatymas (kai nėra nuorodos) -->
+<div id="setup" class="veil" hidden>
+  <form class="card" id="setupForm" autocomplete="off">
+    <img src="icons/icon-192.png" alt="ReSTOCK" width="56" height="56">
+    <h1>ReSTOCK</h1>
+    <p class="sub">Pradinis nustatymas</p>
+
+    <label for="urlInput">Web App nuoroda</label>
+    <input id="urlInput" type="text" inputmode="url" spellcheck="false"
+           placeholder="https://script.google.com/macros/s/…/exec">
+
+    <p class="hint">
+      Apps Script → <b>Deploy</b> → <b>Manage deployments</b> → Web app URL
+      (baigiasi <code>/exec</code>)
+    </p>
+
+
+    <p class="err" id="urlErr" hidden></p>
+
+    <button type="submit">Išsaugoti ir atidaryti</button>
+    <p class="hint small">Nuoroda įsimenama tik šiame įrenginyje.</p>
+  </form>
+</div>
+
+<!-- Nepavyko įkelti -->
+<div id="stall" class="veil" hidden>
+  <div class="card">
+    <img src="icons/icon-192.png" alt="" width="56" height="56">
+    <h1>Nepavyksta įkelti</h1>
+    <p class="hint" id="stallMsg">
+      Programa neatsakė. Patikrinkite interneto ryšį ir ar esate prisijungę
+      prie Google paskyros.
+    </p>
+    <div class="row">
+      <button type="button" id="stallRetry">Bandyti dar kartą</button>
+      <button type="button" class="ghost" id="stallOpen">Atidaryti naršyklėje</button>
+    </div>
+    <p class="hint small"><a href="#" id="stallSetup">Keisti nuorodą</a></p>
+  </div>
+</div>
+
+<!-- Diegimo juosta -->
+<div id="install" hidden>
+  <div class="ib-txt">
+    <b>Įdiekite ReSTOCK</b>
+    <span id="installHint">Veiks kaip programėlė — be adreso juostos</span>
+  </div>
+  <button type="button" id="installGo">Įdiegti</button>
+  <button type="button" id="installNo" aria-label="Slėpti">✕</button>
+</div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var CFG = window.RESTOCK_CONFIG || {};
+  var KEY_URL = 'restock_exec_url';
+  var KEY_HIDE = 'restock_install_hidden';
+  var LOAD_TIMEOUT = 25000;
+
+  var frame = document.getElementById('app');
+  var boot = document.getElementById('boot');
+  var setup = document.getElementById('setup');
+  var setupForm = document.getElementById('setupForm');
+  var urlInput = document.getElementById('urlInput');
+  var urlErr = document.getElementById('urlErr');
+  var stall = document.getElementById('stall');
+  var bar = document.getElementById('install');
+  var barGo = document.getElementById('installGo');
+  var barNo = document.getElementById('installNo');
+  var barHint = document.getElementById('installHint');
+
+  var timer = null;
+  var deferred = null;
+  var current = '';
+
+  /* --- Nuorodos nustatymas ------------------------------------------------ */
+
+  function ls(key, val) {
+    try {
+      if (val === undefined) return localStorage.getItem(key) || '';
+      localStorage.setItem(key, val);
+      return val;
+    } catch (e) { return ''; }
+  }
+
+  function fromQuery(name) {
+    try {
+      var v = new URLSearchParams(window.location.search).get(name);
+      return v ? String(v).trim() : '';
+    } catch (e) { return ''; }
+  }
+
+  function normalize(raw) {
+    var u = String(raw || '').trim().replace(/^["'<]|["'>]$/g, '');
+    if (!u) return '';
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    return u;
+  }
+
+  function validate(u) {
+    if (!u) return 'Įrašykite nuorodą.';
+    if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(u)) return ''; /* lokalus testas */
+    if (!/^https:\/\//i.test(u)) return 'Nuoroda turi prasidėti https://';
+    if (/\/dev(\?|$)/i.test(u)) {
+      return 'Tai /dev nuoroda — ji veikia tik jums. Naudokite /exec.';
+    }
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/?#]+\/exec/i.test(u)) {
+      return 'Neatrodo kaip Apps Script Web App nuoroda. Ji turi baigtis /exec.';
+    }
+    return '';
+  }
+
+  function resolve() {
+    var q = fromQuery(CFG.urlParam || 'u');
+    if (q) {
+      var nq = normalize(q);
+      if (!validate(nq)) { ls(KEY_URL, nq); return nq; }
+    }
+    var saved = normalize(ls(KEY_URL));
+    if (saved && !validate(saved)) return saved;
+    var cfg = normalize(CFG.execUrl);
+    if (cfg && !validate(cfg)) return cfg;
+    return '';
+  }
+
+  /* --- Įkėlimas ----------------------------------------------------------- */
+
+  function show(el) { if (el) el.hidden = false; }
+  function hide(el) { if (el) el.hidden = true; }
+
+  function load(url) {
+    current = url;
+    hide(setup);
+    hide(stall);
+    show(boot);
+    boot.classList.remove('gone');
+
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      boot.classList.add('gone');
+      hide(boot);
+      show(stall);
+    }, LOAD_TIMEOUT);
+
+    frame.src = url;
+  }
+
+  frame.addEventListener('load', function () {
+    if (!current) return;
+    clearTimeout(timer);
+    setTimeout(function () {
+      boot.classList.add('gone');
+      setTimeout(function () { hide(boot); }, 380);
+    }, 120);
+  });
+
+  function askForUrl(message) {
+    hide(boot);
+    hide(stall);
+    show(setup);
+    if (message) {
+      urlErr.textContent = message;
+      show(urlErr);
+    } else {
+      hide(urlErr);
+    }
+    setTimeout(function () { urlInput.focus(); }, 60);
+  }
+
+  setupForm.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var u = normalize(urlInput.value);
+    var err = validate(u);
+    if (err) {
+      urlErr.textContent = err;
+      show(urlErr);
+      return;
+    }
+    ls(KEY_URL, u);
+    urlInput.blur();
+    load(u);
+  });
+
+  document.getElementById('stallRetry').addEventListener('click', function () {
+    if (current) load(current);
+  });
+
+  document.getElementById('stallOpen').addEventListener('click', function () {
+    if (current) window.open(current, '_blank', 'noopener');
+  });
+
+  document.getElementById('stallSetup').addEventListener('click', function (ev) {
+    ev.preventDefault();
+    urlInput.value = current || '';
+    askForUrl('');
+  });
+
+  /* --- Diegimas į telefoną ------------------------------------------------ */
+
+  function standalone() {
+    try {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+             window.matchMedia('(display-mode: fullscreen)').matches ||
+             window.matchMedia('(display-mode: minimal-ui)').matches ||
+             window.navigator.standalone === true;
+    } catch (e) { return false; }
+  }
+
+  function isIOS() {
+    var ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) ||
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function offerInstall() {
+    if (standalone()) return;
+    if (ls(KEY_HIDE) === '1') return;
+
+    if (deferred) {
+      show(barGo);
+      barHint.textContent = 'Veiks kaip programėlė — be adreso juostos';
+    } else if (isIOS()) {
+      hide(barGo);
+      barHint.textContent = 'Safari: Bendrinti → Įtraukti į pagrindinį ekraną';
+    } else {
+      return;
+    }
+    show(bar);
+  }
+
+  barGo.addEventListener('click', function () {
+    if (!deferred) return;
+    var p = deferred;
+    deferred = null;
+    hide(bar);
+    try {
+      p.prompt();
+      p.userChoice.then(function (choice) {
+        if (choice && choice.outcome === 'dismissed') ls(KEY_HIDE, '1');
+      });
+    } catch (e) { /* senesnės naršyklės */ }
+  });
+
+  barNo.addEventListener('click', function () {
+    hide(bar);
+    ls(KEY_HIDE, '1');
+  });
+
+  window.addEventListener('beforeinstallprompt', function (ev) {
+    ev.preventDefault();
+    deferred = ev;
+    setTimeout(offerInstall, 2200);
+  });
+
+  window.addEventListener('appinstalled', function () {
+    hide(bar);
+    ls(KEY_HIDE, '1');
+  });
+
+  /* iOS neturi beforeinstallprompt — parodome užuominą patys. */
+  if (isIOS()) setTimeout(offerInstall, 3500);
+
+  /* --- Service worker ----------------------------------------------------- */
+
+  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function () { /* tyliai */ });
+    });
+  }
+
+  /* --- Startas ------------------------------------------------------------ */
+
+  if (fromQuery(CFG.setupParam || 'setup') === '1') {
+    urlInput.value = normalize(ls(KEY_URL)) || normalize(CFG.execUrl);
+    askForUrl('');
+    return;
+  }
+
+  var url = resolve();
+  if (url) {
+    load(url);
+  } else {
+    askForUrl('');
+  }
+})();
+</script>
+
+</body>
+</html>
