@@ -638,6 +638,63 @@ html, body {
   /* iOS neturi beforeinstallprompt — parodome užuominą patys. */
   if (isIOS()) setTimeout(offerInstall, 3500);
 
+  /* --- „Atgal" elgsena: uždaro langą, o ne programą ------------------------
+     Apvalkalas yra VIRŠUTINIS dokumentas, todėl būtent jo istoriją naršo
+     telefono „Atgal". Programa (`iframe`) praneša, kiek pas ją atidaryta
+     langų. Kol jų yra, laikome vieną apsauginį įrašą — todėl „Atgal"
+     neuždaro programėlės, o prašo programos uždaryti viršutinį langą.
+
+     Programa pirmiausia atsiunčia „hello". Jei ji mūsų nepažįsta (atidaryta
+     ne per apvalkalą), jokio pranešimo negauname ir nieko nekeičiame. */
+
+  var appWin = null;         /* programos (iframe) langas */
+  var SHEET_DEPTH = 0;       /* kiek langų atidaryta programoje */
+  var SHEET_GUARD = false;   /* ar laikome apsauginį istorijos įrašą */
+  var SHEET_SUPPRESS = 0;    /* kiek `popstate` sukėlėme patys */
+
+  function shellArm() {
+    if (SHEET_GUARD) return;
+    SHEET_GUARD = true;
+    try { history.pushState({ restockShell: 1 }, ''); }
+    catch (e) { SHEET_GUARD = false; }
+  }
+
+  function shellDisarmSoon() {
+    Promise.resolve().then(function () {
+      if (SHEET_DEPTH > 0 || !SHEET_GUARD) return;
+      SHEET_GUARD = false;
+      SHEET_SUPPRESS++;
+      try { history.back(); } catch (e) { SHEET_SUPPRESS--; }
+    });
+  }
+
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || typeof d !== 'object') return;
+
+    if (d.restock === 'hello') {
+      appWin = e.source;
+      try { e.source.postMessage({ restock: 'shell' }, '*'); } catch (err) { /* tyliai */ }
+      return;
+    }
+    if (d.restock === 'sheets' && e.source === appWin) {
+      SHEET_DEPTH = Math.max(0, d.n | 0);
+      if (SHEET_DEPTH > 0) shellArm();
+      else shellDisarmSoon();
+    }
+  });
+
+  window.addEventListener('popstate', function () {
+    if (SHEET_SUPPRESS > 0) { SHEET_SUPPRESS--; return; }   /* mūsų paties back() */
+    SHEET_GUARD = false;                                    /* apsauginis įrašas sunaudotas */
+    if (SHEET_DEPTH > 0) {
+      SHEET_DEPTH = Math.max(0, SHEET_DEPTH - 1);           /* optimistiškai */
+      try { (appWin || frame.contentWindow).postMessage({ restock: 'back' }, '*'); }
+      catch (e) { /* tyliai */ }
+      shellArm();                                           /* jei langų dar liko — saugome vėl */
+    }
+  });
+
   /* --- Service worker ----------------------------------------------------- */
 
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
