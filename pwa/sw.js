@@ -9,7 +9,9 @@
    Todėl: kešuojamas TIK šio origin'o apvalkalas, viskas kita — tiesiai į tinklą.
    ========================================================================== */
 
-const CACHE = 'restock-shell-v1';
+/* 🔴 Versiją KELKITE kiekvieną kartą pakeitę apvalkalo failus — kitaip
+   įdiegta programėlė ir toliau rodys seną `index.html` iš talpyklos. */
+const CACHE = 'restock-shell-v2';
 
 const SHELL = [
   './',
@@ -27,8 +29,11 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
       /* Kiekvienas failas kešuojamas atskirai: jei vieno nėra (pvz., dar
-         nesugeneruotos PNG ikonos), likęs apvalkalas vis tiek įkešuojamas. */
-      .then((cache) => Promise.all(SHELL.map((u) => cache.add(u).catch(() => null))))
+         nesugeneruotos PNG ikonos), likęs apvalkalas vis tiek įkešuojamas.
+         🔴 `cache: 'reload'` apeina HTTP talpyklą — kitaip po versijos
+         pakėlimo galėtume įkešuoti SENĄ `index.html`. */
+      .then((cache) => Promise.all(SHELL.map((u) =>
+        cache.add(new Request(u, { cache: 'reload' })).catch(() => null))))
       .then(() => self.skipWaiting())
       .catch(() => self.skipWaiting())
   );
