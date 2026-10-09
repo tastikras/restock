@@ -13,8 +13,9 @@
 
 window.RESTOCK_CONFIG = {
 
-  /* Pvz.: 'https://script.google.com/macros/s/AKfycb.../exec' */
-  execUrl: '',
+  /* ReSTOCK Web App nuoroda — PWA visada jungiasi ČIA.
+     Jei norite laikinai nukreipti kitur, pridėkite `?u=<nuoroda>` adrese. */
+  execUrl: 'https://script.google.com/macros/s/AKfycbxPZj7Jwiwq9gnkYW8CFOfTYJS0xUG_5Cyi03eQXVBAXj8VC6kE3rC33ByX7mMocXEp8g/exec',
 
   /* Nuorodos perrašymas per adresą: ...?u=<nuoroda> (naudojama QR kodui). */
   urlParam: 'u',
