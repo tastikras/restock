@@ -494,10 +494,16 @@ html, body {
       var nq = normalize(q);
       if (!validate(nq)) { ls(KEY_URL, nq); return nq; }
     }
+    /* 🔴 `config.js` NUORODA — PIRMENYBĖ (2026-10-09). Jei ji įrašyta, PWA
+       visada jungiasi BŪTENT ja, nepaisant anksčiau telefone įsimintos.
+       Todėl pakeitus `config.js` nereikia nieko daryti įrenginiuose. */
+    var cfg = normalize(CFG.execUrl);
+    if (cfg && !validate(cfg)) {
+      if (ls(KEY_URL) !== cfg) ls(KEY_URL, cfg);
+      return cfg;
+    }
     var saved = normalize(ls(KEY_URL));
     if (saved && !validate(saved)) return saved;
-    var cfg = normalize(CFG.execUrl);
-    if (cfg && !validate(cfg)) return cfg;
     return '';
   }
 
