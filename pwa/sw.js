@@ -11,7 +11,7 @@
 
 /* 🔴 Versiją KELKITE kiekvieną kartą pakeitę apvalkalo failus — kitaip
    įdiegta programėlė ir toliau rodys seną `index.html` iš talpyklos. */
-const CACHE = 'restock-shell-v2';
+const CACHE = 'restock-shell-v3';
 
 const SHELL = [
   './',
