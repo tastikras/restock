@@ -1,4 +1,21 @@
 <!DOCTYPE html>
+<!--
+  ==========================================================================
+  ⚠️  TAI NE APPS SCRIPT FAILAS — nepainiokite su kitu Index.html
+  ==========================================================================
+  Yra DU skirtingi index.html:
+
+    1) ReStock_Scripts_2026.09.23/Index.html
+       → ReSTOCK programos sąsaja. Keliama į Apps Script redaktorių.
+
+    2) pwa/index.html  ← ŠIS FAILAS
+       → PWA apvalkalas. Publikuojamas statiniame hostinge (ne Apps Script).
+
+  Šie du failai NIEKADA nesusitinka: šio failo į Apps Script kelti nereikia
+  ir negalima (Apps Script negali atiduoti manifest.webmanifest nei sw.js).
+  Ryšys tarp jų — viena /exec nuoroda faile pwa/config.js.
+  ==========================================================================
+-->
 <html lang="lt">
 <head>
 <meta charset="utf-8">
@@ -17,6 +34,21 @@
 <meta name="format-detection" content="telephone=no">
 
 <style>
+/* ============================================================================
+   ReSTOCK PWA — apvalkalas
+   ============================================================================
+   Tai NE pati programa. Tai plonas, įdiegiamas „kėbulas", kuriame pilnu
+   ekranu atidaromas ReSTOCK Web App (Apps Script `iframe`).
+
+   Kodėl taip: Google Apps Script Web App fiziškai negali būti įdiegiamas —
+   jis rodomas Google apvalkale (sandboxed iframe), kurio manifestas ir
+   service worker neveikia. Todėl įdiegiamas yra šis puslapis, o programa
+   atidaroma jo viduje.
+
+   FONAS: iframe yra nuo krašto iki krašto. Saugias zonas (išpjova, gestų
+   juosta) tvarko pati programa per savo `env(safe-area-inset-*)` — taip
+   išlaikomas toks pats vaizdas kaip naršyklėje.
+   ========================================================================== */
 
 :root {
   --bg:      #F6F6F8;
@@ -65,6 +97,8 @@ html, body {
   -webkit-text-size-adjust: 100%;
 }
 
+/* --- Programa ------------------------------------------------------------ */
+
 #app {
   position: fixed;
   inset: 0;
@@ -74,6 +108,8 @@ html, body {
   border: 0;
   background: #0B0B0E;
 }
+
+/* --- Uždangos (įkėlimas / nustatymas / strigtis) ------------------------- */
 
 .veil {
   position: fixed;
@@ -89,7 +125,11 @@ html, body {
 }
 
 .veil[hidden] { display: none; }
+
 #setup { background: var(--bg); }
+
+/* --- Įkėlimo uždanga ---------------------------------------------------- */
+
 #boot {
   flex-direction: column;
   gap: 22px;
@@ -98,7 +138,9 @@ html, body {
 }
 
 #boot.gone { opacity: 0; pointer-events: none; }
+
 #boot img { width: 76px; height: 76px; border-radius: 50%; }
+
 #boot .bar {
   width: 132px;
   height: 2px;
@@ -128,6 +170,8 @@ html, body {
   letter-spacing: .16em;
   text-transform: uppercase;
 }
+
+/* --- Nustatymo kortelė -------------------------------------------------- */
 
 .card {
   width: 100%;
@@ -232,6 +276,8 @@ html, body {
 .card button:hover { background: var(--brand-lo); }
 .card button:active { transform: translateY(1px); }
 
+/* --- Strjties uždanga --------------------------------------------------- */
+
 #stall .card { text-align: center; }
 #stall .card img { margin: 0 auto; }
 #stall .row { display: flex; gap: 10px; margin-top: 18px; }
@@ -241,6 +287,8 @@ html, body {
   color: var(--ink-2);
   border: 1px solid var(--line);
 }
+
+/* --- Diegimo juosta ----------------------------------------------------- */
 
 #install {
   position: fixed;
@@ -316,14 +364,20 @@ html, body {
 </head>
 
 <body>
+
+<!-- 🔴 `allow="microphone"` BŪTINAS. Programos viduje (Apps Script
+     smėliadėžėje) mikrofonas blokuojamas, todėl diktavimą atlieka ŠIS
+     dokumentas — žr. „Diktavimas balsu (mikrofono tiltas)" žemiau. -->
 <iframe id="app" title="ReSTOCK" allow="camera; microphone; geolocation; clipboard-read; clipboard-write; fullscreen; autoplay"></iframe>
 
+<!-- Įkėlimas -->
 <div id="boot" class="veil">
   <img src="icons/icon-192.png" alt="" width="76" height="76">
   <div class="bar"><i></i></div>
   <p>Jungiamasi</p>
 </div>
 
+<!-- Pradinis nustatymas (kai nėra nuorodos) -->
 <div id="setup" class="veil" hidden>
   <form class="card" id="setupForm" autocomplete="off">
     <img src="icons/icon-192.png" alt="ReSTOCK" width="56" height="56">
@@ -347,6 +401,7 @@ html, body {
   </form>
 </div>
 
+<!-- Nepavyko įkelti -->
 <div id="stall" class="veil" hidden>
   <div class="card">
     <img src="icons/icon-192.png" alt="" width="56" height="56">
@@ -363,6 +418,7 @@ html, body {
   </div>
 </div>
 
+<!-- Diegimo juosta -->
 <div id="install" hidden>
   <div class="ib-txt">
     <b>Įdiekite ReSTOCK</b>
@@ -393,9 +449,12 @@ html, body {
   var barGo = document.getElementById('installGo');
   var barNo = document.getElementById('installNo');
   var barHint = document.getElementById('installHint');
+
   var timer = null;
   var deferred = null;
   var current = '';
+
+  /* --- Nuorodos nustatymas ------------------------------------------------ */
 
   function ls(key, val) {
     try {
@@ -438,7 +497,9 @@ html, body {
       var nq = normalize(q);
       if (!validate(nq)) { ls(KEY_URL, nq); return nq; }
     }
-
+    /* 🔴 `config.js` NUORODA — PIRMENYBĖ (2026-10-09). Jei ji įrašyta, PWA
+       visada jungiasi BŪTENT ja, nepaisant anksčiau telefone įsimintos.
+       Todėl pakeitus `config.js` nereikia nieko daryti įrenginiuose. */
     var cfg = normalize(CFG.execUrl);
     if (cfg && !validate(cfg)) {
       if (ls(KEY_URL) !== cfg) ls(KEY_URL, cfg);
@@ -449,8 +510,11 @@ html, body {
     return '';
   }
 
+  /* --- Įkėlimas ----------------------------------------------------------- */
+
   function show(el) { if (el) el.hidden = false; }
   function hide(el) { if (el) el.hidden = true; }
+
   function load(url) {
     current = url;
     hide(setup);
@@ -518,6 +582,8 @@ html, body {
     askForUrl('');
   });
 
+  /* --- Diegimas į telefoną ------------------------------------------------ */
+
   function standalone() {
     try {
       return window.matchMedia('(display-mode: standalone)').matches ||
@@ -578,12 +644,22 @@ html, body {
     ls(KEY_HIDE, '1');
   });
 
+  /* iOS neturi beforeinstallprompt — parodome užuominą patys. */
   if (isIOS()) setTimeout(offerInstall, 3500);
 
-  var appWin = null;
-  var SHEET_DEPTH = 0;
-  var SHEET_GUARD = false;
-  var SHEET_SUPPRESS = 0;
+  /* --- „Atgal" elgsena: uždaro langą, o ne programą ------------------------
+     Apvalkalas yra VIRŠUTINIS dokumentas, todėl būtent jo istoriją naršo
+     telefono „Atgal". Programa (`iframe`) praneša, kiek pas ją atidaryta
+     langų. Kol jų yra, laikome vieną apsauginį įrašą — todėl „Atgal"
+     neuždaro programėlės, o prašo programos uždaryti viršutinį langą.
+
+     Programa pirmiausia atsiunčia „hello". Jei ji mūsų nepažįsta (atidaryta
+     ne per apvalkalą), jokio pranešimo negauname ir nieko nekeičiame. */
+
+  var appWin = null;         /* programos (iframe) langas */
+  var SHEET_DEPTH = 0;       /* kiek langų atidaryta programoje */
+  var SHEET_GUARD = false;   /* ar laikome apsauginį istorijos įrašą */
+  var SHEET_SUPPRESS = 0;    /* kiek `popstate` sukėlėme patys */
 
   function shellArm() {
     if (SHEET_GUARD) return;
@@ -600,6 +676,14 @@ html, body {
       try { history.back(); } catch (e) { SHEET_SUPPRESS--; }
     });
   }
+
+  /* --- Diktavimas balsu (mikrofono tiltas) --------------------------------
+     🔴 KODĖL ČIA. Apps Script rodo programą smėliadėžės `iframe` be
+     `allow="microphone"`, todėl programos viduje mikrofonas atmetamas iš
+     karto (`not-allowed`) ir naršyklės leidimo dialogo neparodo. Šis
+     apvalkalas yra VIRŠUTINIS dokumentas, todėl jo leidimas prašomas
+     įprastai. Programa atsiunčia „mic-start", o atgal gauna atpažintą
+     tekstą. Naudojama tik tada, kai programa pati mikrofono gauti negali. */
 
   var MIC = { rec: null, on: false, lang: 'lt-LT' };
 
@@ -620,6 +704,10 @@ html, body {
   function shellMicStart() {
     if (!micSupported()) { micPost({ restock: 'mic-error', code: 'unsupported' }); return; }
     if (MIC.on) shellMicStop();
+
+    /* 🔴 IŠKART patvirtiname, kad apvalkalas gyvas. Programa tada nuima
+       2 s saugiklį ir laukia leidimo dialogo tiek, kiek reikia. */
+    micPost({ restock: 'mic-ack' });
 
     var run = function () {
       var Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -647,6 +735,7 @@ html, body {
       catch (e) { micPost({ restock: 'mic-error', code: 'not-allowed' }); }
     };
 
+    /* Naršyklės leidimo dialogą iššaukia TIK `getUserMedia`. */
     var md = navigator.mediaDevices;
     if (!md || !md.getUserMedia) { run(); return; }
 
@@ -671,8 +760,17 @@ html, body {
       try { e.source.postMessage({ restock: 'shell' }, '*'); } catch (err) { /* tyliai */ }
       return;
     }
-    if (d.restock === 'mic-start' && e.source === appWin) { shellMicStart(); return; }
-    if (d.restock === 'mic-stop' && e.source === appWin) { shellMicStop(); return; }
+    /* 🔴 Atskiras mikrofono paspaudimas. Programa siunčia į `window.top`
+       (ji gyvena Apps Script smėliadėžės iframe, todėl jos `parent` yra
+       „Google" apvalkalas, o ne šis dokumentas). Atsakome TAM, kas parašė —
+       `e.source`. */
+    if (d.restock === 'mic-hello') {
+      appWin = e.source;
+      try { e.source.postMessage({ restock: 'mic-here' }, '*'); } catch (err) { /* tyliai */ }
+      return;
+    }
+    if (d.restock === 'mic-start') { appWin = e.source; shellMicStart(); return; }
+    if (d.restock === 'mic-stop') { appWin = e.source; shellMicStop(); return; }
     if (d.restock === 'sheets' && e.source === appWin) {
       SHEET_DEPTH = Math.max(0, d.n | 0);
       if (SHEET_DEPTH > 0) shellArm();
@@ -681,21 +779,25 @@ html, body {
   });
 
   window.addEventListener('popstate', function () {
-    if (SHEET_SUPPRESS > 0) { SHEET_SUPPRESS--; return; }
-    SHEET_GUARD = false;
+    if (SHEET_SUPPRESS > 0) { SHEET_SUPPRESS--; return; }   /* mūsų paties back() */
+    SHEET_GUARD = false;                                    /* apsauginis įrašas sunaudotas */
     if (SHEET_DEPTH > 0) {
-      SHEET_DEPTH = Math.max(0, SHEET_DEPTH - 1);
+      SHEET_DEPTH = Math.max(0, SHEET_DEPTH - 1);           /* optimistiškai */
       try { (appWin || frame.contentWindow).postMessage({ restock: 'back' }, '*'); }
       catch (e) { /* tyliai */ }
-      shellArm();
+      shellArm();                                           /* jei langų dar liko — saugome vėl */
     }
   });
+
+  /* --- Service worker ----------------------------------------------------- */
 
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function () { /* tyliai */ });
     });
   }
+
+  /* --- Startas ------------------------------------------------------------ */
 
   if (fromQuery(CFG.setupParam || 'setup') === '1') {
     urlInput.value = normalize(ls(KEY_URL)) || normalize(CFG.execUrl);
@@ -711,5 +813,6 @@ html, body {
   }
 })();
 </script>
+
 </body>
 </html>
