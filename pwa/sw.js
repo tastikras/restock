@@ -1,4 +1,19 @@
-const CACHE = 'restock-shell-v4';
+/* ============================================================================
+   ReSTOCK PWA — service worker
+   ============================================================================
+   Užduotis: padaryti apvalkalą (shell) įdiegiamu ir atidaryti jį akimirksniu.
+
+   SVARBU: service worker NIEKADA neliečia kryžminio (cross-origin) srauto.
+   Pats ReSTOCK turinys gyvena `script.google.com` iframe'e — jei SW bandytų
+   jį kešuoti ar perrašyti, sulaužytume `google.script.run` ryšį.
+   Todėl: kešuojamas TIK šio origin'o apvalkalas, viskas kita — tiesiai į tinklą.
+   ========================================================================== */
+
+/* 🔴 Versiją KELKITE kiekvieną kartą pakeitę apvalkalo failus — kitaip
+   įdiegta programėlė ir toliau rodys seną `index.html` iš talpyklos.
+   v5 (2026-10-14): mikrofono tiltas per `window.top` + `mic-ack`. */
+const CACHE = 'restock-shell-v5';
+
 const SHELL = [
   './',
   './index.html',
@@ -14,6 +29,10 @@ const SHELL = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
+      /* Kiekvienas failas kešuojamas atskirai: jei vieno nėra (pvz., dar
+         nesugeneruotos PNG ikonos), likęs apvalkalas vis tiek įkešuojamas.
+         🔴 `cache: 'reload'` apeina HTTP talpyklą — kitaip po versijos
+         pakėlimo galėtume įkešuoti SENĄ `index.html`. */
       .then((cache) => Promise.all(SHELL.map((u) =>
         cache.add(new Request(u, { cache: 'reload' })).catch(() => null))))
       .then(() => self.skipWaiting())
@@ -31,7 +50,9 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+
   if (req.method !== 'GET') return;
+
   let url;
   try {
     url = new URL(req.url);
@@ -39,7 +60,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  /* Kitas origin'as (Google, CDN, Drive nuotraukos) — neliečiame. */
   if (url.origin !== self.location.origin) return;
+
+  /* Navigacija: visada grąžiname apvalkalą (jis ir yra „programėlė"). */
   if (req.mode === 'navigate') {
     event.respondWith(
       caches.match('./index.html')
@@ -49,6 +73,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  /* Kitas apvalkalo failas: kešas pirma, tinklas atsarginis. */
   event.respondWith(
     caches.match(req).then((hit) => {
       if (hit) return hit;
