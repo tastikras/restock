@@ -1,4 +1,4 @@
-const CACHE = 'restock-shell-v3';
+const CACHE = 'restock-shell-v4';
 const SHELL = [
   './',
   './index.html',
@@ -31,9 +31,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-
   if (req.method !== 'GET') return;
-
   let url;
   try {
     url = new URL(req.url);
@@ -42,7 +40,6 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.origin !== self.location.origin) return;
-
   if (req.mode === 'navigate') {
     event.respondWith(
       caches.match('./index.html')
