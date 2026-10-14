@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="lt">
 <head>
 <meta charset="utf-8">
@@ -18,6 +17,7 @@
 <meta name="format-detection" content="telephone=no">
 
 <style>
+
 :root {
   --bg:      #F6F6F8;
   --card:    #FFFFFF;
@@ -89,9 +89,7 @@ html, body {
 }
 
 .veil[hidden] { display: none; }
-
 #setup { background: var(--bg); }
-
 #boot {
   flex-direction: column;
   gap: 22px;
@@ -100,9 +98,7 @@ html, body {
 }
 
 #boot.gone { opacity: 0; pointer-events: none; }
-
 #boot img { width: 76px; height: 76px; border-radius: 50%; }
-
 #boot .bar {
   width: 132px;
   height: 2px;
@@ -320,9 +316,8 @@ html, body {
 </head>
 
 <body>
-
 <iframe id="app" title="ReSTOCK" allow="camera; microphone; geolocation; clipboard-read; clipboard-write; fullscreen; autoplay"></iframe>
-  
+
 <div id="boot" class="veil">
   <img src="icons/icon-192.png" alt="" width="76" height="76">
   <div class="bar"><i></i></div>
@@ -343,6 +338,7 @@ html, body {
       Apps Script → <b>Deploy</b> → <b>Manage deployments</b> → Web app URL
       (baigiasi <code>/exec</code>)
     </p>
+
 
     <p class="err" id="urlErr" hidden></p>
 
@@ -397,11 +393,9 @@ html, body {
   var barGo = document.getElementById('installGo');
   var barNo = document.getElementById('installNo');
   var barHint = document.getElementById('installHint');
-
   var timer = null;
   var deferred = null;
   var current = '';
-
 
   function ls(key, val) {
     try {
@@ -444,6 +438,7 @@ html, body {
       var nq = normalize(q);
       if (!validate(nq)) { ls(KEY_URL, nq); return nq; }
     }
+
     var cfg = normalize(CFG.execUrl);
     if (cfg && !validate(cfg)) {
       if (ls(KEY_URL) !== cfg) ls(KEY_URL, cfg);
@@ -456,7 +451,6 @@ html, body {
 
   function show(el) { if (el) el.hidden = false; }
   function hide(el) { if (el) el.hidden = true; }
-
   function load(url) {
     current = url;
     hide(setup);
@@ -607,6 +601,67 @@ html, body {
     });
   }
 
+  var MIC = { rec: null, on: false, lang: 'lt-LT' };
+
+  function micPost(msg) {
+    if (!appWin) return;
+    try { appWin.postMessage(msg, '*'); } catch (e) { /* tyliai */ }
+  }
+
+  function micSupported() {
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }
+
+  function shellMicStop() {
+    if (MIC.rec) { try { MIC.rec.stop(); } catch (e) { /* tyliai */ } }
+    MIC.on = false;
+  }
+
+  function shellMicStart() {
+    if (!micSupported()) { micPost({ restock: 'mic-error', code: 'unsupported' }); return; }
+    if (MIC.on) shellMicStop();
+
+    var run = function () {
+      var Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+      var rec = new Ctor();
+      rec.lang = MIC.lang;
+      rec.continuous = false;
+      rec.interimResults = true;
+
+      rec.onstart = function () { MIC.on = true; micPost({ restock: 'mic-ready' }); };
+      rec.onresult = function (ev) {
+        var txt = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+        micPost({ restock: 'mic-text', text: txt });
+      };
+      rec.onerror = function (ev) {
+        MIC.on = false;
+        var code = ev && ev.error;
+        if (code === 'no-speech' || code === 'aborted') return;   /* tyla — ne klaida */
+        micPost({ restock: 'mic-error', code: code || 'not-allowed' });
+      };
+      rec.onend = function () { MIC.on = false; micPost({ restock: 'mic-end' }); };
+
+      MIC.rec = rec;
+      try { rec.start(); }
+      catch (e) { micPost({ restock: 'mic-error', code: 'not-allowed' }); }
+    };
+
+    var md = navigator.mediaDevices;
+    if (!md || !md.getUserMedia) { run(); return; }
+
+    md.getUserMedia({ audio: true }).then(function (stream) {
+      try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { /* tyliai */ }
+      run();
+    }).catch(function (err) {
+      var n = (err && err.name) || 'not-allowed';
+      var code = (n === 'NotFoundError' || n === 'DevicesNotFoundError' ||
+                  n === 'NotReadableError' || n === 'TrackStartError')
+        ? 'audio-capture' : 'not-allowed';
+      micPost({ restock: 'mic-error', code: code });
+    });
+  }
+
   window.addEventListener('message', function (e) {
     var d = e.data;
     if (!d || typeof d !== 'object') return;
@@ -616,6 +671,8 @@ html, body {
       try { e.source.postMessage({ restock: 'shell' }, '*'); } catch (err) { /* tyliai */ }
       return;
     }
+    if (d.restock === 'mic-start' && e.source === appWin) { shellMicStart(); return; }
+    if (d.restock === 'mic-stop' && e.source === appWin) { shellMicStop(); return; }
     if (d.restock === 'sheets' && e.source === appWin) {
       SHEET_DEPTH = Math.max(0, d.n | 0);
       if (SHEET_DEPTH > 0) shellArm();
@@ -640,7 +697,7 @@ html, body {
     });
   }
 
- if (fromQuery(CFG.setupParam || 'setup') === '1') {
+  if (fromQuery(CFG.setupParam || 'setup') === '1') {
     urlInput.value = normalize(ls(KEY_URL)) || normalize(CFG.execUrl);
     askForUrl('');
     return;
@@ -654,6 +711,5 @@ html, body {
   }
 })();
 </script>
-
 </body>
 </html>
